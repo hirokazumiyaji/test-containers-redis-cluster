@@ -2,15 +2,21 @@ package com.github.hirokazumiyaji.testcontainers
 
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.wait.strategy.Wait
+import java.time.Instant
+import kotlin.random.Random
 
 class RedisContainer : GenericContainer<RedisContainer> {
-    constructor() : super("redis:5.0-alpine") {
-        withExposedPorts(6379)
-        waitingFor(Wait.forLogMessage(".*Ready to accept connections.*", 1))
-        withCommand("redis-server",
-                    "--cluster-enabled", "yes",
-                    "--cluster-config-file", "node.conf",
-                    "--cluster-node-timeout", "2000")
+    private val startPort = Random(Instant.now().toEpochMilli()).nextInt(6379, 56379)
+
+    val ports: List<Int>
+        get() = (startPort..startPort + 5).toList()
+
+    constructor() : super("quay.io/hirokazumiyaji/redis-cluster:5.0.5") {
+        portBindings = ports.map { "$it:$it" }
+        withExposedPorts(*ports.toTypedArray())
+        withEnv("REDIS_CLUSTER_PORTS", ports.joinToString(" "))
+        waitingFor(Wait.forLogMessage(".*Redis cluster is already accepted connections.*", 1))
+        withCommand("yes", "Y")
         start()
     }
 }

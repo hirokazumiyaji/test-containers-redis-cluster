@@ -1,9 +1,8 @@
 package com.github.hirokazumiyaji.testcontainers
 
-import com.google.common.flogger.FluentLogger
 import io.lettuce.core.RedisURI
 import io.lettuce.core.cluster.RedisClusterClient
-import io.lettuce.core.cluster.api.sync.RedisAdvancedClusterCommands
+import io.lettuce.core.cluster.api.sync.RedisClusterCommands
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -11,31 +10,45 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.test.context.junit.jupiter.SpringExtension
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
+import java.util.UUID
 
 @ExtendWith(SpringExtension::class)
 @Testcontainers
 class RedisTest {
 
     companion object {
-        val log = FluentLogger.forEnclosingClass()!!
         @Container
         val redis = RedisContainer()
     }
 
-    private var commands: RedisAdvancedClusterCommands<String, String>? = null
+    private var commands: RedisClusterCommands<String, String>? = null
 
     @BeforeEach
     fun setUp() {
-        val uri = RedisURI.create(redis.containerIpAddress, redis.getMappedPort(6379))
-        val client = RedisClusterClient.create(uri)
+        val uris = redis.ports.map {
+            RedisURI.create(redis.containerIpAddress, redis.getMappedPort(it))
+        }
+        val client = RedisClusterClient.create(uris)
         val connection = client.connect()
         commands = connection.sync()
     }
 
     @Test
-    fun initialize() {
+    fun ping() {
         val cmd = commands ?: return
         val expected = "PONG"
         Assertions.assertEquals(expected, cmd.ping())
+    }
+
+    @Test
+    fun setAndGet() {
+        val cmd = commands ?: return
+        (1..100).forEach { _ ->
+            val key = UUID.randomUUID().toString()
+            val expected = UUID.randomUUID().toString()
+            cmd.set(key, expected)
+            val actual = cmd.get(key)
+            Assertions.assertEquals(expected, actual)
+        }
     }
 }
